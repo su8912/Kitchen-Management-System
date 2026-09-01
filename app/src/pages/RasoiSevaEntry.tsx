@@ -24,7 +24,7 @@ export function RasoiSevaEntry() {
 
 function SevaReadOnly() {
   const { visibleBhojanshalas, sevaFor } = useStore()
-  const { t, pickName } = useLang()
+  const { t } = useLang()
   const date = todayISO()
   const halls = visibleBhojanshalas()
 
@@ -74,7 +74,7 @@ function BhojanshalaSevaCard({
   bhojanshala,
 }: {
   date: string
-  bhojanshala: { id: number; nameG: string; nameE: string }
+  bhojanshala: { id: number; nameG: string; nameH: string; nameE: string }
 }) {
   const { sevaFor } = useStore()
   const { t, pickName, pickLabel } = useLang()

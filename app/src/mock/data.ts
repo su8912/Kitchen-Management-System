@@ -142,10 +142,10 @@ const prevMonth = thisMonth === 1 ? 12 : thisMonth - 1
 const prevMonthYear = thisMonth === 1 ? thisYear - 1 : thisYear
 
 export const salaryTransactions: SalaryTransaction[] = [
-  { id: 1, staffId: 1, year: prevMonthYear, month: prevMonth, monthlySalary: 15000, advance: 1000, paidOn: null, remarks: null },
-  { id: 2, staffId: 2, year: prevMonthYear, month: prevMonth, monthlySalary: 10000, advance: null, paidOn: null, remarks: null },
-  { id: 3, staffId: 3, year: prevMonthYear, month: prevMonth, monthlySalary: 12000, advance: 2000, paidOn: null, remarks: null },
-  { id: 4, staffId: 4, year: prevMonthYear, month: prevMonth, monthlySalary: 8000, advance: null, paidOn: null, remarks: null },
+  { id: 1, staffId: 1, year: prevMonthYear, month: prevMonth, monthlySalary: 15000, daysPresent: 26, perDaySalary: 500, paidOn: null, remarks: null },
+  { id: 2, staffId: 2, year: prevMonthYear, month: prevMonth, monthlySalary: 10000, daysPresent: 28, perDaySalary: 333, paidOn: null, remarks: null },
+  { id: 3, staffId: 3, year: prevMonthYear, month: prevMonth, monthlySalary: 12000, daysPresent: 25, perDaySalary: 400, paidOn: null, remarks: null },
+  { id: 4, staffId: 4, year: prevMonthYear, month: prevMonth, monthlySalary: 8000, daysPresent: 27, perDaySalary: 267, paidOn: null, remarks: null },
 ]
 
 // ── Transactions ──────────────────────────────────────────────────────────

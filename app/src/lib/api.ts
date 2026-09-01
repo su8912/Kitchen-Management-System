@@ -82,7 +82,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
 
   const text = await res.text()
-  return text ? JSON.parse(text) : undefined
+  return (text ? JSON.parse(text) : undefined) as T
 }
 
 export const api = {

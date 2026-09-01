@@ -37,12 +37,15 @@ router.post('/login', async (req, res) => {
     const token = signToken(user.id)
 
   // httpOnly cookie — JS cannot read it, protecting against XSS
-  res.cookie('token', token, {
+  // sameSite 'none' is required when frontend and backend are on different domains
+  const cookieOpts = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: (process.env.NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  })
+  }
+
+  res.cookie('token', token, cookieOpts)
 
   res.json(publicUser(user))
   } catch (error) {
@@ -53,7 +56,11 @@ router.post('/login', async (req, res) => {
 
 /** POST /api/auth/logout — clear the cookie */
 router.post('/logout', (_req, res) => {
-  res.clearCookie('token')
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: (process.env.NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
+  })
   res.json({ ok: true })
 })
 

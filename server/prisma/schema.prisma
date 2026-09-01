@@ -1,0 +1,337 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionType {
+  PURCHASE
+  CONSUMPTION
+}
+
+enum MealTime {
+  MORNING
+  AFTERNOON
+  EVENING
+}
+
+enum Role {
+  ADMIN
+  DATA_ENTRY
+}
+
+enum Unit {
+  KG
+  LITRE
+  COUNT
+  CYLINDER_COUNT
+  METER_READING
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  HOLIDAY
+}
+
+/// Optional fields a category form may collect.
+/// The floor (datetime, itemId, qty, remarks) is always present and not listed here.
+/// PURCHASE_AMOUNT and SEVA_AMOUNT are ADMIN-only — see effectiveFields() in §11.
+enum FormField {
+  QTY
+  PURCHASE_AMOUNT
+  SEVA_AMOUNT
+  SUPPLIER
+  REMARKS
+}
+
+// ─────────────────────────────  Items & money  ─────────────────────────────
+
+model ItemCategory {
+  id    Int    @id @default(autoincrement())
+  nameE String
+  nameG String
+  nameH String
+
+  items       Item[]
+  formConfigs CategoryFormConfig[]
+  userScopes  UserCategory[]
+
+  @@map("item_category")
+}
+
+/// Which fields a form collects, per (category × transaction type).
+/// Also the single source of truth for which types a category supports.
+model CategoryFormConfig {
+  id              Int             @id @default(autoincrement())
+  itemCategoryId  Int
+  transactionType TransactionType
+  fields          FormField[]
+
+  itemCategory ItemCategory @relation(fields: [itemCategoryId], references: [id])
+
+  @@unique([itemCategoryId, transactionType])
+  @@map("category_form_config")
+}
+
+model Item {
+  id             Int      @id @default(autoincrement())
+  nameE          String
+  nameG          String
+  nameH          String
+  unit           Unit
+  itemCategoryId Int
+  minimumQty     Decimal? @db.Decimal(12, 3)
+  openingStock   Decimal  @default(0) @db.Decimal(12, 3)
+  isActive       Boolean  @default(true)
+
+  itemCategory ItemCategory  @relation(fields: [itemCategoryId], references: [id])
+  transactions Transaction[]
+
+  @@map("item")
+}
+
+model Transaction {
+  id              Int             @id @default(autoincrement())
+  datetime        DateTime
+  transactionType TransactionType
+  itemId          Int
+  qty             Decimal         @db.Decimal(12, 3)
+  purchaseAmount  Decimal?        @db.Decimal(12, 2)
+  sevaAmount      Decimal?        @db.Decimal(12, 2)
+  supplier        String?
+  remarks         String?
+
+  createdById Int?
+  createdAt   DateTime @default(now())
+  updatedById Int?
+  updatedAt   DateTime @updatedAt
+
+  item      Item  @relation(fields: [itemId], references: [id])
+  createdBy User? @relation("TxnCreatedBy", fields: [createdById], references: [id])
+  updatedBy User? @relation("TxnUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([datetime])
+  @@index([itemId, transactionType])
+  @@map("transaction")
+}
+
+// ──────────────────────────  Bhojanshala & meals  ──────────────────────────
+
+model Bhojanshala {
+  id       Int     @id @default(autoincrement())
+  nameE    String
+  nameG    String
+  nameH    String
+  isActive Boolean @default(true)
+
+  counts     BhojanshalaCount[]
+  menus      Menu[]
+  sevaSlots  RasoiSevaSlot[]
+  userScopes UserBhojanshala[]
+
+  @@map("bhojanshala")
+}
+
+/// How many were ACTUALLY served. Cf. RasoiSevaSlot.personCount = sponsored.
+model BhojanshalaCount {
+  id            Int      @id @default(autoincrement())
+  date          DateTime @db.Date
+  bhojanshalaId Int
+  mealTime      MealTime
+  count         Int
+  remarks       String?
+
+  createdById Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bhojanshala Bhojanshala @relation(fields: [bhojanshalaId], references: [id])
+  createdBy   User?       @relation(fields: [createdById], references: [id])
+
+  @@unique([date, bhojanshalaId, mealTime])
+  @@map("bhojanshala_count")
+}
+
+model Dish {
+  id       Int     @id @default(autoincrement())
+  nameE    String
+  nameG    String
+  nameH    String
+  isActive Boolean @default(true)
+
+  menuDishes MenuDish[]
+
+  @@map("dish")
+}
+
+model Menu {
+  id            Int      @id @default(autoincrement())
+  date          DateTime @db.Date
+  mealTime      MealTime
+  bhojanshalaId Int
+  remarks       String?
+
+  createdById Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bhojanshala Bhojanshala @relation(fields: [bhojanshalaId], references: [id])
+  createdBy   User?       @relation(fields: [createdById], references: [id])
+  dishes      MenuDish[]
+
+  @@unique([date, mealTime, bhojanshalaId])
+  @@map("menu")
+}
+
+model MenuDish {
+  menuId Int
+  dishId Int
+
+  menu Menu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  dish Dish @relation(fields: [dishId], references: [id])
+
+  @@id([menuId, dishId])
+  @@map("menu_dish")
+}
+
+model RasoiSeva {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @db.Date
+  donorName String
+  amount    Decimal? @db.Decimal(12, 2)
+  remarks   String?
+
+  createdById Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User?           @relation(fields: [createdById], references: [id])
+  slots     RasoiSevaSlot[]
+
+  @@index([date])
+  @@map("rasoi_seva")
+}
+
+/// The count is per slot, not on the header: a donor may sponsor
+/// 300 at Bhojanshala A morning and 200 at B afternoon.
+model RasoiSevaSlot {
+  id            Int      @id @default(autoincrement())
+  rasoiSevaId   Int
+  bhojanshalaId Int
+  mealTime      MealTime
+  personCount   Int
+
+  rasoiSeva   RasoiSeva   @relation(fields: [rasoiSevaId], references: [id], onDelete: Cascade)
+  bhojanshala Bhojanshala @relation(fields: [bhojanshalaId], references: [id])
+
+  @@unique([rasoiSevaId, bhojanshalaId, mealTime])
+  @@map("rasoi_seva_slot")
+}
+
+// ───────────────────────────  Staff & salary  ───────────────────────────
+
+model Staff {
+  id            Int     @id @default(autoincrement())
+  name          String
+  designation   String
+  monthlySalary Decimal @db.Decimal(12, 2)
+  remarks       String?
+  isActive      Boolean @default(true)
+
+  salaries    SalaryTransaction[]
+  attendances StaffAttendance[]
+
+  @@map("staff")
+}
+
+model SalaryTransaction {
+  id      Int @id @default(autoincrement())
+  staffId Int
+  year    Int
+  month   Int // 1..12
+
+  /// SNAPSHOT of staff.monthlySalary at entry time.
+  monthlySalary Decimal @db.Decimal(12, 2)
+  /// Days present for this month (from attendance, editable).
+  daysPresent   Decimal @db.Decimal(5, 1)
+  /// Per-day rate = monthlySalary ÷ daysInMonth by default, editable.
+  perDaySalary  Decimal @db.Decimal(12, 2)
+  remarks       String?
+  paidOn        DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staff Staff @relation(fields: [staffId], references: [id])
+
+  @@unique([staffId, year, month])
+  @@map("salary_transaction")
+}
+
+model StaffAttendance {
+  id        Int              @id @default(autoincrement())
+  staffId   Int
+  date      DateTime         @db.Date
+  status    AttendanceStatus @default(PRESENT)
+  remarks   String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  staff Staff @relation(fields: [staffId], references: [id])
+
+  @@unique([staffId, date])
+  @@index([date])
+  @@map("staff_attendance")
+}
+
+// ────────────────────────  Users & access control  ────────────────────────
+
+model User {
+  id           Int     @id @default(autoincrement())
+  name         String
+  username     String  @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean @default(true)
+
+  categories   UserCategory[]
+  bhojanshalas UserBhojanshala[]
+
+  txnsCreated Transaction[]      @relation("TxnCreatedBy")
+  txnsUpdated Transaction[]      @relation("TxnUpdatedBy")
+  counts      BhojanshalaCount[]
+  menus       Menu[]
+  sevas       RasoiSeva[]
+
+  @@map("user")
+}
+
+model UserCategory {
+  userId         Int
+  itemCategoryId Int
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemCategory ItemCategory @relation(fields: [itemCategoryId], references: [id])
+
+  @@id([userId, itemCategoryId])
+  @@map("user_category")
+}
+
+model UserBhojanshala {
+  userId        Int
+  bhojanshalaId Int
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bhojanshala Bhojanshala @relation(fields: [bhojanshalaId], references: [id])
+
+  @@id([userId, bhojanshalaId])
+  @@map("user_bhojanshala")
+}
